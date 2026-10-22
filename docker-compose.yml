@@ -1,0 +1,17 @@
+services:
+  ztrust-api:
+    build: .
+    image: ztrust:latest
+    ports:
+      - "8080:8080"
+    env_file: .env
+    volumes:
+      - ztrust-data:/data
+    restart: unless-stopped
+
+  # To pay real bounties, run a Zcash full node (Zebra) plus a wallet that
+  # exposes the zcashd-compatible JSON-RPC (Zallet), then set
+  # ZTRUST_ZCASH_BACKEND=rpc in .env. See docs/zcash-integration.md.
+
+volumes:
+  ztrust-data:

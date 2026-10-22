@@ -1,0 +1,73 @@
+name: "ZTrust Supply-Chain Scan"
+description: "Zero-trust supply-chain scan: vulnerable & malicious deps, typosquats, leaked secrets, unsafe CI. Uploads SARIF to code scanning."
+author: "ZTrust contributors"
+branding:
+  icon: "shield"
+  color: "orange"
+
+inputs:
+  path:
+    description: "Directory to scan"
+    default: "."
+  fail-on:
+    description: "Fail the job at this severity or higher (info|low|medium|high|critical|none)"
+    default: "high"
+  offline:
+    description: "Skip OSV.dev lookups"
+    default: "false"
+  upload-sarif:
+    description: "Upload results to GitHub code scanning (needs `security-events: write`)"
+    default: "true"
+
+outputs:
+  sarif-file:
+    description: "Path of the generated SARIF report"
+    value: ${{ steps.scan.outputs.sarif-file }}
+  exit-code:
+    description: "0 = clean, 1 = findings at or above fail-on"
+    value: ${{ steps.scan.outputs.exit-code }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install ZTrust
+      shell: bash
+      run: python -m pip install --quiet "$GITHUB_ACTION_PATH"
+
+    - name: Scan
+      id: scan
+      shell: bash
+      # Inputs are passed through env vars, never interpolated into the script (see rule ZT-CI-003).
+      env:
+        ZT_PATH: ${{ inputs.path }}
+        ZT_FAIL_ON: ${{ inputs.fail-on }}
+        ZT_OFFLINE: ${{ inputs.offline }}
+      run: |
+        set +e
+        args=(scan "$ZT_PATH" --format sarif --output ztrust.sarif --fail-on "$ZT_FAIL_ON")
+        if [ "$ZT_OFFLINE" = "true" ]; then args+=(--offline); fi
+        ztrust "${args[@]}"
+        code=$?
+        echo "sarif-file=ztrust.sarif" >> "$GITHUB_OUTPUT"
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        if [ "$code" -gt 1 ]; then exit "$code"; fi
+
+    - name: Upload SARIF
+      if: inputs.upload-sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ztrust.sarif
+        category: ztrust
+
+    - name: Enforce policy
+      if: steps.scan.outputs.exit-code == '1'
+      shell: bash
+      env:
+        ZT_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        echo "::error title=ZTrust::Supply-chain findings at or above '$ZT_FAIL_ON'. See the Security tab."
+        exit 1

